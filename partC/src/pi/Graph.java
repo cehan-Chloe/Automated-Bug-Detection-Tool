@@ -1,0 +1,162 @@
+package pi;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class Graph {
+	public Expand ex = new Expand(this);
+	// to store the node and its called count hashName->count
+	Map<Integer, Integer> calleeCountMap = new HashMap<Integer, Integer>();
+	// to store the hashCode name and string name pair hashCodeName->stringName
+	Map<Integer, String> nodeHashNameString = new HashMap<Integer, String>();
+	// to store the caller and calledNodes set caller->calleeSet
+	Map<Integer, Set<Integer>> callerCalleeSet = new HashMap<Integer, Set<Integer>>();
+	// to store pair and pair count pairList->count
+	Map<Pair<Integer, Integer>,Integer> pairCount= new HashMap<Pair<Integer, Integer>,Integer>();
+	
+	void addNode(String caller, int callerHash){
+		nodeHashNameString.put(callerHash, caller);
+	}
+	
+	void addCallee(int calleeHash){
+		if(calleeCountMap.containsKey(calleeHash)){
+			calleeCountMap.put(calleeHash, calleeCountMap.get(calleeHash) + 1);
+		}
+		else{
+			calleeCountMap.put(calleeHash,1);
+		}
+		
+	}
+	
+	void addPair(int caller){
+		Pair<Integer, Integer> tempList = new Pair<Integer, Integer>(0, 0);
+		Set<Integer> callee = new HashSet<Integer>();	
+		callee = callerCalleeSet.get(caller);
+		Integer[] newArray = new Integer[callee.size()];
+		callee.toArray(newArray);
+		for(int i = 0; i < newArray.length; i++)
+		{
+			for(int j = i+1; j < newArray.length; j++)
+			{
+				if (nodeHashNameString.get(newArray[i]).compareTo(nodeHashNameString.get(newArray[j])) < 0)
+					tempList = new Pair<Integer, Integer>(newArray[i], newArray[j]);
+				else
+					tempList = new Pair<Integer, Integer>(newArray[j], newArray[i]);				
+				if(pairCount.containsKey(tempList)){				
+					pairCount.put(tempList, pairCount.get(tempList)+1);
+				}
+				else{
+					pairCount.put(tempList,1);
+				}
+			}		
+		}	
+	}
+
+	public void findBug(int support,int confidence){
+		for(int x : callerCalleeSet.keySet() ){
+			Set<Integer> tempSet = new HashSet<Integer>();
+			tempSet = callerCalleeSet.get(x);
+			for(int y : tempSet){
+				for(Pair<Integer,Integer> tempList : pairCount.keySet()){
+					if((tempList.getLeft() == y || tempList.getRight() == y) && pairCount.get(tempList) >= support){
+						int nodeAppearCount = calleeCountMap.get(y);
+						int pairAppearCount = pairCount.get(tempList);
+						double confidentCount = (double)pairAppearCount / (double)nodeAppearCount * 100;
+						if(tempList.getLeft()==y){
+							if(!tempSet.contains(tempList.getRight()) && confidentCount >= confidence){
+								printBug(x, y, tempList,pairAppearCount,confidentCount);
+							}
+						}else if(tempList.getRight()==y){
+							if(!tempSet.contains(tempList.getLeft()) && confidentCount >= confidence){
+								printBug(x, y, tempList,pairAppearCount,confidentCount);
+							}
+						}					
+					}
+				}
+			}
+		}
+	}
+	
+  void printPair(){
+  String[] aTemp = new String[5];
+  for(Pair<Integer, Integer> abc : pairCount.keySet()){
+          aTemp[0] = nodeHashNameString.get(abc.getLeft());
+          aTemp[1] = nodeHashNameString.get(abc.getRight());
+          int count = pairCount.get(abc);
+          System.out.println("pair: ("+aTemp[0]+","+aTemp[1]+")"+" "+count);
+  }
+}
+
+	void printBug(int x, int y, Pair<Integer,Integer> tempList,int pairAppearCount,double confidentCount){
+        System.out.println("bug: " +
+                        nodeHashNameString.get(y)+" in "+nodeHashNameString.get(x)+", " +
+                        "pair: "+"("+nodeHashNameString.get(tempList.getLeft())+", "+nodeHashNameString.get(tempList.getRight())+")"+", " +
+                        "support: "+pairAppearCount+", " +
+                        "confidence: "+String.format("%.2f",confidentCount)+"%");
+	}
+
+	void readGraph(String fileName, int expand_time){
+		try{
+			BufferedReader reader = new BufferedReader(new FileReader(fileName));
+			String line = null;
+			Pattern patternCaller = Pattern.compile("Call graph node for function: \'(\\w+)\'.*");
+			while ((line = reader.readLine()) != null){
+				//RegExp: ignore null function && external node functions.				
+				Matcher m = patternCaller.matcher(line);				
+				if(m.matches()){
+					String caller = m.group(1);
+//					System.out.println(caller);
+					int callerHash = caller.hashCode();
+					addNode(caller, callerHash);
+					
+					// to store the set of callee
+					Set<Integer> calledNodes = new HashSet<Integer>();
+					Pattern patternCallee = Pattern.compile("  CS<\\w+> calls function \'(\\w+)\'.*");
+					Pattern patternExternal = Pattern.compile("  CS<\\w+> calls external node.*");
+					while((line = reader.readLine())!= null){
+//						System.out.println("sub reg");
+						
+						Matcher n = patternCallee.matcher(line);
+						Matcher e = patternExternal.matcher(line);
+						
+						if (n.matches()){
+							String callee = n.group(1);
+							int calleeHash = callee.hashCode();
+							addNode(callee, calleeHash);
+							calledNodes.add(calleeHash);		
+						}
+						else if(e.matches()){
+							continue;
+						}
+						else break;
+					}
+					
+					callerCalleeSet.put(callerHash, calledNodes);
+				}
+			}
+			// after statistic the node and pair, expand the graph
+			ex.expandGraph(expand_time);
+			
+			for (int caller : callerCalleeSet.keySet()){
+				addPair(caller);
+				for(int callee : callerCalleeSet.get(caller)){
+					addCallee(callee);
+				}
+			}
+//			printPair();
+			reader.close();
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+			System.exit(1);
+		}
+	
+	}
+}
