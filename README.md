@@ -14,3 +14,7 @@ Using a Static Bug Detection Tool, Coverity, to Analyzing Your Own Code.
 Build
 
 Use Makefile to build the program. The Makefile in every part provides 'all' and 'clean' operation. The path are definite path.
+
+Execution
+
+Use shell script pipair to execute.

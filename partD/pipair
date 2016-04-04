@@ -1,0 +1,12 @@
+#!/bin/bash
+DIRECTORY=$(cd $(dirname "$0") && pwd)
+CUR_PATH=$(pwd)
+BC_FILE=$CUR_PATH/$1
+
+if [ "$#" == 1 ]; then
+opt -print-callgraph $1 2>$BC_FILE.graph 1>/dev/null
+java -Xms128m -Xmx128m -cp $DIRECTORY/bin pi.Pipair $BC_FILE.graph 2>/dev/null
+else [ "$#" == 3 ]; 
+opt -print-callgraph $1 2>$BC_FILE.graph 1>/dev/null
+java -Xms128m -Xmx128m -cp $DIRECTORY/bin pi.Pipair $BC_FILE.graph $2 $3 2>/dev/null
+fi
